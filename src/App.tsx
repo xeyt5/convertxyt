@@ -1,49 +1,53 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { Download, FileVideo, Music } from "lucide-react";
+import "./styles/app.css";
+import { DownloaderView } from "./features/downloader/DownloaderView";
+
+type Tab = "download" | "convert" | "audio";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const [activeTab, setActiveTab] = useState<Tab>("download");
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <main className="app">
+      <section className="window">
+        <header className="header">
+          <h1>convert</h1>
+          <nav className="tabs">
+            <button className={activeTab === "download" ? "tab active": "tab"}
+            onClick={() => setActiveTab("download")}>
+              <Download size={16}/>
+              Descargar
+            </button>
+            <button className={activeTab === "convert" ? "tab active": "tab"}
+              onClick={() => setActiveTab("convert")}>
+              <FileVideo size={16}/>
+              Convertir
+            </button>
+            <button className={activeTab === "audio" ? "tab active": "tab"}
+            onClick={() => setActiveTab("audio")}>
+              <Music size={16}/>
+              Audio
+            </button>
+          </nav>
+        </header>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        <section className="content">
+        {activeTab === "download" && <DownloaderView />}
+        {activeTab === "convert" && (
+          <div>
+            <h2>Convertir video</h2>
+            <p>convirte un archivo de video a otro formato</p>
+          </div>
+        )}
+        {activeTab === "audio" && (
+          <div>
+            <h2>Descarga audio</h2>
+            <p>Extrae o Descarga audio de un video</p>
+          </div>
+        )}
+        </section>
+      </section>
     </main>
   );
 }
