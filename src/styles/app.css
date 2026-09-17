@@ -136,3 +136,91 @@ button {
 .form-group input:focus {
   background: #646568;
 }
+
+.form-group select {
+  width: 100%;
+  padding: 8px 14px;
+
+  border: 0;
+  border-radius: 8px;
+
+  outline: none;
+
+  color: #242323;
+  background: #383838;
+
+  cursor: pointer;
+}
+
+.form-group select:focus {
+  background: #3a3a3a;
+}
+
+.downloader {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.folder-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.folder-selector input {
+  flex: 1;
+}
+
+.folder-selector button {
+  padding: 12px 16px;
+  border-radius: 8px;
+
+  color: #ffffff;
+  background: #595a5c;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.folder-selector button:hover {
+  background: #66676a;
+}
+
+.download-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  width: 100%;
+  padding: 13px 16px;
+
+  border-radius: 8px;
+
+  color: #ffffff;
+  background: #707174;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+.download-button:hover {
+  background: #7c7d80;
+}
+
+.download-button:active {
+  transform: scale(0.99);
+}
+
+.download-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

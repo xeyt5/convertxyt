@@ -1,6 +1,6 @@
 interface UrlInputProps{
-    value: String;
-    onChange: (value: String) => void;
+    value: string;
+    onChange: (value: string) => void;
 }
 
 export function UrlInput({value, onChange}: UrlInputProps){
