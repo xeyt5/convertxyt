@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "convertxyt",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "com.convertxyt.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,7 +14,7 @@
       {
         "title": "convertxyt",
         "width": 800,
-        "height": 600
+        "height": 780
       }
     ],
     "security": {
@@ -23,13 +23,29 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "appimage",
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Descarga y convierte videos y audio",
+    "category": "Video"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdDODg1QzJGRDEwMTlFMDMKUldRRG5nSFJMMXlJZkRXam1KSy9tYURsTUIyaUJhZ1pnVCs1UjhCdHNjeC9lNythRHppYW5aZEwK",
+      "endpoints": [
+        "https://github.com/xeyt5/convertxyt/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

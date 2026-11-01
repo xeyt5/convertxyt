@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "externalBin": [
+      "binaries/yt-dlp",
+      "binaries/ffmpeg",
+      "binaries/ffprobe",
+      "binaries/deno"
+    ]
+  }
+}
