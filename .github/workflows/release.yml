@@ -12,7 +12,8 @@ permissions:
 jobs:
   build:
     strategy:
-      fail-fast: true
+      # Si un sistema falla, el otro termina igual: se ven todos los errores de una vez.
+      fail-fast: false
       matrix:
         # Ubuntu antiguo a propósito: el AppImage funciona en sistemas iguales o más nuevos.
         os: [ubuntu-22.04, windows-latest]

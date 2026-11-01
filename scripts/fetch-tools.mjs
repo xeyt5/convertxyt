@@ -41,6 +41,10 @@ async function download(url) {
 
 /** Busca el hash de `name` en un archivo de sumas con líneas `hash  nombre`. */
 function findHash(sums, name) {
+  // Deno genera la suma de Windows con PowerShell: `Hash : ABC…`.
+  const powershell = sums.match(/^Hash\s*:\s*([0-9a-f]{64})\s*$/im);
+  if (powershell) return powershell[1];
+
   for (const line of sums.split("\n")) {
     const [hash, file] = line.trim().split(/\s+/);
     if (file?.replace(/^\*/, "") === name) return hash;
