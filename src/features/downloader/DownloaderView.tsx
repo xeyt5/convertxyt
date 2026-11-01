@@ -1,33 +1,34 @@
 import { useState } from "react";
 import { UrlInput } from "./components/UrlInput";
-import { QuealitySelector } from "./components/QualitySelector";
+import { QualitySelector } from "./components/QualitySelector";
 import { ProfileSelector } from "./components/ProfileSelector";
 import { OutputFolder } from "./components/OutputFolder";
-import { Download } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+import { useOutputFolder } from "../job/useOutputFolder";
+import type { Job } from "../job/useJob";
 
-export function DownloaderView() {
-    const [url, setUrl] = useState ("");
+export function DownloaderView({ job }: { job: Job }) {
+    const [url, setUrl] = useState("");
     const [quality, setQuality] = useState("best");
     const [profile, setProfile] = useState("best");
-    const [outputFolder, setOutputFolder] = useState(() => localStorage.getItem("download-folder") ?? "",);
-    const headleDownload = async () =>{ const result = await invoke<string>("download_video",{ url, quality, profile, outputFolder}); console.log(result)};
+    const [outputFolder, setOutputFolder] = useOutputFolder();
 
-    return(
-        <section className="downloader">
-            <UrlInput value={url} onChange={setUrl}/>
+    const ready = url.trim() !== "" && outputFolder !== "" && job.status !== "running";
 
-            <QuealitySelector value={quality} onChange={setQuality}/>
+    const handleDownload = () =>
+        job.start("download_video", { url, quality, profile, outputFolder });
 
-            <ProfileSelector value={profile} onChange={setProfile}/>
+    return (
+        <section className="view">
+            <div className="group">
+                <UrlInput value={url} onChange={setUrl} />
+                <QualitySelector value={quality} onChange={setQuality} />
+                <ProfileSelector value={profile} onChange={setProfile} />
+                <OutputFolder value={outputFolder} onChange={setOutputFolder} />
+            </div>
 
-            <OutputFolder value={outputFolder} onChange={setOutputFolder}/>
-
-            <button type="button" className="download-button" onClick={headleDownload}>
-                <Download size={18}/>
+            <button type="button" className="primary" disabled={!ready} onClick={handleDownload}>
                 Descargar
             </button>
         </section>
     );
-    
 }

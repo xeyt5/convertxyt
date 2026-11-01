@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Herramientas descargadas por scripts/fetch-tools.mjs
+src-tauri/binaries

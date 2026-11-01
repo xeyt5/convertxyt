@@ -2,51 +2,49 @@ import { useState } from "react";
 import { Download, FileVideo, Music } from "lucide-react";
 import "./styles/app.css";
 import { DownloaderView } from "./features/downloader/DownloaderView";
+import { ConvertView } from "./features/convert/ConvertView";
+import { AudioView } from "./features/audio/AudioView";
+import { JobPanel } from "./features/job/JobPanel";
+import { useJob } from "./features/job/useJob";
+import { UpdateBanner } from "./features/update/UpdateBanner";
 
 type Tab = "download" | "convert" | "audio";
 
+const tabs = [
+  { id: "download", label: "Descargar", icon: Download },
+  { id: "convert", label: "Convertir", icon: FileVideo },
+  { id: "audio", label: "Audio", icon: Music },
+] as const;
+
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("download");
+  // Vive aquí para que el progreso siga visible al cambiar de pestaña.
+  const job = useJob();
 
   return (
     <main className="app">
-      <section className="window">
-        <header className="header">
-          <h1>convert</h1>
-          <nav className="tabs">
-            <button className={activeTab === "download" ? "tab active": "tab"}
-            onClick={() => setActiveTab("download")}>
-              <Download size={16}/>
-              Descargar
-            </button>
-            <button className={activeTab === "convert" ? "tab active": "tab"}
-              onClick={() => setActiveTab("convert")}>
-              <FileVideo size={16}/>
-              Convertir
-            </button>
-            <button className={activeTab === "audio" ? "tab active": "tab"}
-            onClick={() => setActiveTab("audio")}>
-              <Music size={16}/>
-              Audio
-            </button>
-          </nav>
-        </header>
+      <nav className="tabs">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            className={activeTab === id ? "tab active" : "tab"}
+            aria-current={activeTab === id ? "page" : undefined}
+            onClick={() => setActiveTab(id)}
+          >
+            <Icon size={16} />
+            {label}
+          </button>
+        ))}
+      </nav>
 
-        <section className="content">
-        {activeTab === "download" && <DownloaderView />}
-        {activeTab === "convert" && (
-          <div>
-            <h2>Convertir video</h2>
-            <p>convirte un archivo de video a otro formato</p>
-          </div>
-        )}
-        {activeTab === "audio" && (
-          <div>
-            <h2>Descarga audio</h2>
-            <p>Extrae o Descarga audio de un video</p>
-          </div>
-        )}
-        </section>
+      <UpdateBanner busy={job.status === "running"} />
+
+      <section className="content">
+        {activeTab === "download" && <DownloaderView job={job} />}
+        {activeTab === "convert" && <ConvertView job={job} />}
+        {activeTab === "audio" && <AudioView job={job} />}
+        <JobPanel job={job} />
       </section>
     </main>
   );
