@@ -26,7 +26,7 @@ export function AudioView({ job }: { job: Job }) {
   const [url, setUrl] = useState("");
   const [input, setInput] = useState("");
   const [format, setFormat] = useState("mp3");
-  const [outputFolder, setOutputFolder] = useOutputFolder();
+  const [outputFolder, setOutputFolder] = useOutputFolder("audio");
 
   const hasSource = source === "url" ? url.trim() !== "" : input !== "";
   const ready = hasSource && outputFolder !== "" && job.status !== "running";

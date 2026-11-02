@@ -14,7 +14,6 @@ export function OutputFolder({ value, onChange }: OutputFolderProps) {
         });
         if (typeof selected === "string") {
             onChange(selected);
-            localStorage.setItem("download-folder", selected);
         }
     };
 

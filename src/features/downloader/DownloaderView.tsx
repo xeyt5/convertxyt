@@ -10,7 +10,7 @@ export function DownloaderView({ job }: { job: Job }) {
     const [url, setUrl] = useState("");
     const [quality, setQuality] = useState("best");
     const [profile, setProfile] = useState("best");
-    const [outputFolder, setOutputFolder] = useOutputFolder();
+    const [outputFolder, setOutputFolder] = useOutputFolder("download");
 
     const ready = url.trim() !== "" && outputFolder !== "" && job.status !== "running";
 

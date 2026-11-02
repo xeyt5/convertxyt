@@ -26,7 +26,7 @@ export function ConvertView({ job }: { job: Job }) {
   const [inputs, setInputs] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [format, setFormat] = useState("mp4");
-  const [outputFolder, setOutputFolder] = useOutputFolder();
+  const [outputFolder, setOutputFolder] = useOutputFolder("convert");
 
   const addInputs = (paths: string[]) =>
     setInputs((current) => [...new Set([...current, ...paths])]);

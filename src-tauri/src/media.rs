@@ -35,6 +35,12 @@ const H264_AAC: &[&str] = &[
     "-vf", EVEN_SIZE, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
     "-c:a", "aac", "-b:a", "192k",
 ];
+const H264_NVENC_AAC: &[&str] = &[
+    "-vf", EVEN_SIZE, "-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq",
+    "19", "-b:v", "0", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+];
+// Decodifica con NVDEC. Si la tarjeta no admite el códec de entrada, ffmpeg usa la CPU.
+const GPU_DECODE: &[&str] = &["-hwaccel", "cuda"];
 const FASTSTART: &[&str] = &["-movflags", "+faststart"];
 // DaVinci Resolve gratis en Linux no lee H.264/AAC: necesita DNxHR y audio PCM.
 const DAVINCI: &[&str] = &[
@@ -47,6 +53,24 @@ const VP9_OPUS: &[&str] = &[
 
 fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| item.to_string()).collect()
+}
+
+fn h264_aac(gpu: bool) -> &'static [&'static str] {
+    if gpu {
+        H264_NVENC_AAC
+    } else {
+        H264_AAC
+    }
+}
+
+/// Intenta con la GPU si la hay. NVENC rechaza algunos videos (H.264 por encima de 4096 px, por
+/// ejemplo), así que un fallo se repite en CPU; cancelar no es un fallo y no se repite.
+fn prefer_gpu(gpu_available: bool, mut attempt: impl FnMut(bool) -> JobResult) -> JobResult {
+    if gpu_available {
+        attempt(true).or_else(|_| attempt(false))
+    } else {
+        attempt(false)
+    }
 }
 
 fn validate_url(url: &str) -> Result<&str, String> {
@@ -91,7 +115,7 @@ fn parse_height(quality: &str) -> Result<Option<u32>, String> {
 }
 
 /// Argumentos de formato y recodificación para `download_video`.
-fn video_args(quality: &str, profile: &str) -> Result<Vec<String>, String> {
+fn video_args(quality: &str, profile: &str, gpu: bool) -> Result<Vec<String>, String> {
     let height = parse_height(quality)?;
     let selector = match height {
         Some(h) => format!("bv*[height<={h}]+ba/b[height<={h}]"),
@@ -107,7 +131,7 @@ fn video_args(quality: &str, profile: &str) -> Result<Vec<String>, String> {
     match profile {
         "best" => {}
         "davinci-linux" => recode(&mut args, "mov", DAVINCI.to_vec()),
-        "youtube" => recode(&mut args, "mp4", [H264_AAC, FASTSTART].concat()),
+        "youtube" => recode(&mut args, "mp4", [h264_aac(gpu), FASTSTART].concat()),
         "small" => {
             // Sin límite elegido, "menor peso" se queda en 720p.
             let target = height.unwrap_or(720);
@@ -133,8 +157,12 @@ pub fn download_video(
     output_folder: &str,
     emit: &mut dyn FnMut(Progress),
 ) -> JobResult {
-    let format_args = video_args(quality, profile)?;
-    run_ytdlp(manager, url, output_folder, format_args, emit)
+    // Solo este perfil recodifica a H.264; los demás no pasan por NVENC.
+    let gpu_available = profile == "youtube" && tools::nvenc_available();
+    prefer_gpu(gpu_available, |gpu| {
+        let format_args = video_args(quality, profile, gpu)?;
+        run_ytdlp(manager, url, output_folder, format_args, &mut *emit)
+    })
 }
 
 pub fn download_audio(
@@ -252,14 +280,23 @@ pub fn convert_video(
     output_folder: &str,
     emit: &mut dyn FnMut(Progress),
 ) -> JobResult {
-    let (extension, codec_args): (&str, Vec<&str>) = match format {
-        "mp4" => ("mp4", [H264_AAC, FASTSTART].concat()),
-        "mkv" => ("mkv", H264_AAC.to_vec()),
-        "webm" => ("webm", VP9_OPUS.to_vec()),
-        "davinci-linux" => ("mov", DAVINCI.to_vec()),
-        other => return Err(format!("Formato no válido: {other}")),
-    };
-    run_ffmpeg(manager, input, extension, &codec_args, output_folder, "Convirtiendo", emit)
+    prefer_gpu(tools::nvenc_available(), |gpu| {
+        let (extension, codec_args, h264): (&str, Vec<&str>, bool) = match format {
+            "mp4" => ("mp4", [h264_aac(gpu), FASTSTART].concat(), true),
+            "mkv" => ("mkv", h264_aac(gpu).to_vec(), true),
+            // NVIDIA no codifica VP9 ni DNxHR: la GPU solo ayuda a decodificar.
+            "webm" => ("webm", VP9_OPUS.to_vec(), false),
+            "davinci-linux" => ("mov", DAVINCI.to_vec(), false),
+            other => return Err(format!("Formato no válido: {other}")),
+        };
+        let encoding = Encoding {
+            decode_args: if gpu { GPU_DECODE } else { &[] },
+            extension,
+            codec_args: &codec_args,
+            label: if gpu && h264 { "Convirtiendo con GPU" } else { "Convirtiendo" },
+        };
+        run_ffmpeg(manager, input, &encoding, output_folder, &mut *emit)
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -332,7 +369,7 @@ pub fn convert_videos(
             let current = progress.percent.unwrap_or(0.0) / 100.0;
             emit(Progress::new(
                 Some((index as f64 + current) / total as f64 * 100.0),
-                format!("Video {} de {total} · {name}", index + 1),
+                format!("Video {} de {total} · {name} · {}", index + 1, progress.message),
             ));
         };
         match convert_video(manager, input, format, output_folder, &mut report) {
@@ -373,29 +410,43 @@ pub fn extract_audio(
         _ => &["-c:a", "pcm_s16le"],
     };
     let args = [&["-vn"], codec].concat();
-    run_ffmpeg(manager, input, format, &args, output_folder, "Extrayendo audio", emit)
+    let encoding = Encoding {
+        decode_args: &[],
+        extension: format,
+        codec_args: &args,
+        label: "Extrayendo audio",
+    };
+    run_ffmpeg(manager, input, &encoding, output_folder, emit)
+}
+
+struct Encoding<'a> {
+    decode_args: &'a [&'a str],
+    extension: &'a str,
+    codec_args: &'a [&'a str],
+    label: &'a str,
 }
 
 fn run_ffmpeg(
     manager: &JobManager,
     input: &str,
-    extension: &str,
-    codec_args: &[&str],
+    encoding: &Encoding,
     output_folder: &str,
-    label: &str,
     emit: &mut dyn FnMut(Progress),
 ) -> JobResult {
     let input_path = validate_input(input)?;
     let folder = validate_folder(output_folder)?;
-    let output = unique_output(input_path, folder, extension);
+    let output = unique_output(input_path, folder, encoding.extension);
     let duration_us = probe_duration_us(input_path);
+    let label = encoding.label;
 
     let mut command = job::command(&tools::get().ffmpeg);
     command
         .args(["-hide_banner", "-nostdin", "-n", "-loglevel", "error"])
-        .args(["-nostats", "-progress", "pipe:1", "-i"])
+        .args(["-nostats", "-progress", "pipe:1"])
+        .args(encoding.decode_args)
+        .arg("-i")
         .arg(input_path)
-        .args(codec_args)
+        .args(encoding.codec_args)
         .arg(&output);
 
     emit(Progress::new(duration_us.map(|_| 0.0), format!("{label}…")));
@@ -493,20 +544,85 @@ mod tests {
 
     #[test]
     fn construye_el_selector_de_calidad() {
-        assert_eq!(video_args("1080", "best").unwrap()[1], "bv*[height<=1080]+ba/b[height<=1080]");
-        assert_eq!(video_args("best", "best").unwrap()[1], "bv*+ba/b");
+        assert_eq!(video_args("1080", "best", false).unwrap()[1], "bv*[height<=1080]+ba/b[height<=1080]");
+        assert_eq!(video_args("best", "best", false).unwrap()[1], "bv*+ba/b");
     }
 
     #[test]
     fn menor_peso_limita_a_720p_por_defecto() {
-        assert!(video_args("best", "small").unwrap().contains(&"res:720,+size,+br".to_string()));
-        assert!(video_args("1080", "small").unwrap().contains(&"res:1080,+size,+br".to_string()));
+        assert!(video_args("best", "small", false).unwrap().contains(&"res:720,+size,+br".to_string()));
+        assert!(video_args("1080", "small", false).unwrap().contains(&"res:1080,+size,+br".to_string()));
+    }
+
+    #[test]
+    fn el_perfil_youtube_elige_el_codificador_segun_la_gpu() {
+        let recode = |gpu| video_args("best", "youtube", gpu).unwrap().join(" ");
+        assert!(recode(true).contains("-c:v h264_nvenc"));
+        assert!(recode(false).contains("-c:v libx264"));
+    }
+
+    #[test]
+    fn un_fallo_en_gpu_se_repite_en_cpu() {
+        let mut attempts = Vec::new();
+        let result = prefer_gpu(true, |gpu| {
+            attempts.push(gpu);
+            if gpu { Err("sin NVENC".to_string()) } else { Ok(Some("salida".to_string())) }
+        });
+        assert_eq!(result, Ok(Some("salida".to_string())));
+        assert_eq!(attempts, [true, false]);
+    }
+
+    #[test]
+    fn cancelar_en_gpu_no_se_repite_y_sin_gpu_va_directo_a_cpu() {
+        let mut attempts = Vec::new();
+        assert_eq!(prefer_gpu(true, |gpu| { attempts.push(gpu); Ok(None) }), Ok(None));
+        assert_eq!(attempts, [true]);
+
+        attempts.clear();
+        assert_eq!(prefer_gpu(false, |gpu| { attempts.push(gpu); Ok(None) }), Ok(None));
+        assert_eq!(attempts, [false]);
+    }
+
+    #[test]
+    fn avisa_si_convierte_con_gpu() {
+        let dir = test_dir("gpu-label");
+        let input = sample_video(&dir);
+        let manager = JobManager::default();
+        let mut message = String::new();
+        convert_video(&manager, input.to_str().unwrap(), "mp4", dir.to_str().unwrap(), &mut |p| {
+            message = p.message
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(message.contains("con GPU"), tools::nvenc_available(), "{message}");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// NVENC no admite H.264 tan ancho: con GPU debe terminar igual, en la CPU.
+    #[test]
+    fn un_video_que_la_gpu_rechaza_se_convierte_en_cpu() {
+        let dir = test_dir("gpu-fallback");
+        let input = dir.join("ancho.mkv");
+        let status = Command::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+            .arg("color=black:s=4200x64:d=0.2:r=5")
+            .args(["-c:v", "ffv1"])
+            .arg(&input)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let manager = JobManager::default();
+        let path = convert_video(&manager, input.to_str().unwrap(), "mp4", dir.to_str().unwrap(), &mut |_| {})
+            .unwrap()
+            .unwrap();
+        assert_eq!(codecs(&path), "h264");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn rechaza_opciones_invalidas() {
-        assert!(video_args("abc", "best").is_err());
-        assert!(video_args("best", "otro").is_err());
+        assert!(video_args("abc", "best", false).is_err());
+        assert!(video_args("best", "otro", false).is_err());
         assert!(validate_url("--exec=rm").is_err());
         assert!(validate_url("ftp://x").is_err());
         assert!(validate_folder("").is_err());
