@@ -100,6 +100,23 @@ pub fn wait_for_ytdlp_update() {
     drop(YTDLP_UPDATE.lock());
 }
 
+/// Que ffmpeg incluya NVENC no basta: hacen falta tarjeta y controlador,
+/// así que se comprueba codificando un fotograma. El resultado se recuerda.
+pub fn nvenc_available() -> bool {
+    static AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        job::command(&get().ffmpeg)
+            .args(["-hide_banner", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i"])
+            .arg("color=black:s=256x256:d=0.1")
+            .args(["-frames:v", "1", "-c:v", "h264_nvenc", "-f", "null", "-"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    })
+}
+
 #[cfg(test)]
 pub fn set_for_test(dir: &Path) -> &'static Tools {
     TOOLS.get_or_init(|| Tools::from_dir(dir))

@@ -1,16 +1,28 @@
 import { useState } from "react";
 
-const STORAGE_KEY = "download-folder";
+export type FolderSection = "download" | "convert" | "audio";
 
-function readStored(): string {
+function readStored(key: string): string {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? "";
+    return localStorage.getItem(key) ?? "";
   } catch {
     return "";
   }
 }
 
-/** Carpeta de destino recordada entre sesiones y compartida por todas las pestañas. */
-export function useOutputFolder() {
-  return useState(readStored);
+/** Carpeta de destino de una pestaña, recordada entre sesiones e independiente de las demás. */
+export function useOutputFolder(section: FolderSection) {
+  const key = `${section}-folder`;
+  const [folder, setFolder] = useState(() => readStored(key));
+
+  const chooseFolder = (value: string) => {
+    setFolder(value);
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Sin almacenamiento la carpeta sigue valiendo hasta cambiar de pestaña.
+    }
+  };
+
+  return [folder, chooseFolder] as const;
 }
