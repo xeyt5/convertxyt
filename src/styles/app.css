@@ -427,3 +427,14 @@ button:disabled {
     opacity: 0.5;
   }
 }
+
+/* Arrastrar y soltar */
+
+.drop-target {
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.drop-target.dragging {
+  background: var(--surface-hover);
+  box-shadow: 0 0 0 2px var(--accent);
+}

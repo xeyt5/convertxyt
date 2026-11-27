@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { SelectField } from "../../components/SelectField";
 import { OutputFolder } from "../downloader/components/OutputFolder";
 import { useOutputFolder } from "../job/useOutputFolder";
+import { extensionOf, useFileDrop } from "../job/useFileDrop";
 import type { Job } from "../job/useJob";
 
 const formats = [
@@ -62,15 +63,32 @@ export function ConvertView({ job }: { job: Job }) {
   };
 
   const running = job.status === "running";
+
+  const handleDrop = async (paths: string[]) => {
+    setNotice("");
+    const videos = paths.filter((path) => VIDEO_EXTENSIONS.includes(extensionOf(path)));
+    // Lo que no es un video conocido puede ser una carpeta: se toman sus videos.
+    const others = paths.filter((path) => !videos.includes(path));
+    const fromFolders = await Promise.all(
+      others.map((folder) => invoke<string[]>("list_videos", { folder }).catch(() => [])),
+    );
+    const found = [...videos, ...fromFolders.flat()];
+    if (found.length === 0) setNotice("No se encontraron videos en lo que soltaste.");
+    else addInputs(found);
+  };
+
+  const dragging = useFileDrop(handleDrop, !running);
   const ready = inputs.length > 0 && outputFolder !== "" && !running;
 
   return (
     <section className="view">
-      <div className="group">
+      <div className={dragging ? "group drop-target dragging" : "group drop-target"}>
         <div className="row">
           <span className="row-label">Videos</span>
           <span className="row-path">
-            <bdi>{inputs.length === 0 ? "Ninguno" : `${inputs.length} en la lista`}</bdi>
+            <bdi>
+              {inputs.length === 0 ? "Arrastra videos aquí" : `${inputs.length} en la lista`}
+            </bdi>
           </span>
           <button type="button" className="button" disabled={running} onClick={addFiles}>
             Archivos

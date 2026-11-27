@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 interface FileInputProps {
   label: string;
   value: string;
+  placeholder?: string;
   onChange: (value: string) => void;
 }
 
@@ -11,7 +12,7 @@ const MEDIA_EXTENSIONS = [
   "mp3", "m4a", "opus", "ogg", "flac", "wav",
 ];
 
-export function FileInput({ label, value, onChange }: FileInputProps) {
+export function FileInput({ label, value, placeholder = "Ningún archivo", onChange }: FileInputProps) {
   const selectFile = async () => {
     const selected = await open({
       multiple: false,
@@ -28,7 +29,7 @@ export function FileInput({ label, value, onChange }: FileInputProps) {
     <div className="row">
       <span className="row-label">{label}</span>
       <span className="row-path" title={value}>
-        <bdi>{value || "Ningún archivo"}</bdi>
+        <bdi>{value || placeholder}</bdi>
       </span>
       <button type="button" className="button" onClick={selectFile}>
         Examinar
